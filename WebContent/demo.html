@@ -1,0 +1,632 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>Demo</title>
+<link href="jslib/extjs/resources/css/ext-all.css" rel="stylesheet" />
+<script src="jslib/extjs/ext-all.js"></script>
+<script type="text/javascript">
+Ext.onReady(function(){
+  Ext.tip.QuickTipManager.init();
+  var required = '<span style="color:red;font-weight:bold" data-qtip="Required">*</span>',
+      win, store, caseWin;
+
+  Ext.define('Ext.ux.GroupedGrid', {
+    extend: 'Ext.grid.Panel',
+    xtype: 'grouped-grid',
+    requires: [
+      'Ext.grid.feature.Grouping'
+    ],
+//    collapsible: true,
+    iconCls: 'icon-grid',
+    frame: true,
+    width: 600,
+    height: 400,
+
+    // Need a minHeight. Neptune resizable framed panels are overflow:visible so as to
+    // enable resizing handles to be embedded in the border lines.
+    minHeight: 200,
+    title: 'Cases Template',
+    resizable: true,
+
+    features: [{
+      ftype: 'grouping',
+      groupHeaderTpl: '{columnName}: {name} ({rows.length} Case{[values.rows.length > 1 ? "s" : ""]})',
+      hideGroupedHeader: true,
+      startCollapsed: true,
+      id: 'restaurantGrouping'
+    }],
+
+    initComponent: function() {
+      this.store = getCasesStore();
+      this.columns = [{
+        text: 'Name',
+        flex: 1,
+        dataIndex: 'name'
+      },{
+        text: 'Description',
+        flex: 1,
+        dataIndex: 'desc'
+      }];
+
+      this.callParent();
+
+      var store = this.getStore(),
+        groups = store.getGroups(),
+        len = groups.length, i = 0,
+        toggleMenu = [];
+
+      this.groupingFeature = this.view.getFeature('restaurantGrouping');
+
+      // Create checkbox menu items to toggle associated group
+      for (; i < len; i++) {
+        toggleMenu[i] = {
+          xtype: 'menucheckitem',
+          text: groups[i].name,
+          handler: this.toggleGroup,
+          scope: this
+        }
+      }
+
+      this.addDocked([{
+        xtype: 'toolbar',
+        items: ['->', {
+          text: 'Toggle groups...',
+          destroyMenu: true,
+          menu: toggleMenu
+        }]
+      }, {
+        xtype: 'toolbar',
+        ui: 'footer',
+        dock: 'bottom',
+        items: ['->', {
+          text:'Apply',
+          iconCls: 'icon-clear-group',
+          scope: this,
+          handler: function(){
+            caseWin.hide();
+          }
+        }]
+      }]);
+
+      this.mon(this.store, 'groupchange', this.onGroupChange, this);
+      this.mon(this.view, {
+        groupcollapse: this.onGroupCollapse,
+        groupexpand: this.onGroupExpand,
+        scope: this
+      });
+    },
+
+    onClearGroupingClick: function(){
+      this.groupingFeature.disable();
+    },
+
+    toggleGroup: function(item) {
+      var groupName = item.text;
+      if (item.checked) {
+        this.groupingFeature.expand(groupName, true);
+      } else {
+        this.groupingFeature.collapse(groupName, true);
+      }
+    },
+
+    onGroupChange: function(store, groupers) {
+      var grouped = store.isGrouped(),
+        groupBy = groupers.items[0] ? groupers.items[0].property : '',
+        toggleMenuItems, len, i = 0;
+
+      // Clear grouping button only valid if the store is grouped
+      this.down('[text=Clear Grouping]').setDisabled(!grouped);
+
+      // Sync state of group toggle checkboxes
+      if (grouped && groupBy === 'cuisine') {
+        toggleMenuItems = this.down('button[text=Toggle groups...]').menu.items.items;
+        for (len = toggleMenuItems.length; i < len; i++) {
+          toggleMenuItems[i].setChecked(
+            this.groupingFeature.isExpanded(toggleMenuItems[i].text)
+          );
+        }
+        this.down('[text=Toggle groups...]').enable();
+      } else {
+        this.down('[text=Toggle groups...]').disable();
+      }
+    },
+
+    onGroupCollapse: function(v, n, groupName) {
+      if (!this.down('[text=Toggle groups...]').disabled) {
+        this.down('menucheckitem[text=' + groupName + ']').setChecked(false, true);
+      }
+    },
+
+    onGroupExpand: function(v, n, groupName) {
+      if (!this.down('[text=Toggle groups...]').disabled) {
+        this.down('menucheckitem[text=' + groupName + ']').setChecked(true, true);
+      }
+    }
+  });
+
+  function getCasesStore(){
+    var myData = [
+      ['1', '傷風', '傷風感冒類', 'Description'],
+      ['2', '熱感', '傷風感冒類', 'Description'],
+      ['3', 'H5N1', '傷風感冒類', 'Description'],
+      ['4', '頭暈', '頭暈身興類', 'Description'],
+      ['5', '偏頭痛', '頭暈身興類', 'Description']
+    ];
+
+    return Ext.create('Ext.data.ArrayStore', {
+      fields: [
+        {name: 'id'},
+        {name: 'name'},
+        {name: 'group'},
+        {name: 'desc'}
+      ],
+      groupField: 'group',
+      sorters: {
+        property : 'id',
+        direction: 'ASC'
+      },
+      data: myData,
+      pageSize: 8
+    });
+  }
+
+  function showCases(){
+    if (!caseWin){
+      var caseGrid = Ext.create('Ext.ux.GroupedGrid');
+
+      caseWin = Ext.widget('window', {
+        title: 'Case template',
+        closeAction: 'hide',
+        width: 400,
+        height: 500,
+        minWidth: 300,
+        minHeight: 300,
+        layout: 'fit',
+        resizable: true,
+        modal: true,
+        items: caseGrid
+//        defaultFocus: 'firstName'
+      });
+    }
+    caseWin.show();
+  }
+
+  function getPatientStore () {
+    // Reverse order data should get sorted by the MemoryProxy
+    var myData = [
+      ['1', 'Craig', '09:12', '<span style="color:gray">Completed</span>'],
+      ['2', 'Ian', '10:12', '<span style="color:gray">Completed</span>'],
+      ['3', 'Ash', '10:50', '<span style="color:green;">Processing...</span>'],
+      ['4', 'Kain', '10:56', '<span style="color:green;">Processing...</span>'],
+      ['5', 'Martin', '-', 'Waiting call']
+    ];
+
+    return Ext.create('Ext.data.ArrayStore', {
+      fields: [
+        {name: 'id'},
+        {name: 'name'},
+        {name: 'time'},
+        {name: 'status'}
+      ],
+      sorters: {
+        property : 'id',
+        direction: 'ASC'
+      },
+      data: myData,
+      pageSize: 8
+    });
+  }
+
+
+  function showContactForm() {
+    if (!win) {
+      var form = Ext.widget('form', {
+        layout: {
+          type: 'vbox',
+          align: 'stretch'
+        },
+        border: false,
+        bodyPadding: 10,
+
+        fieldDefaults: {
+          labelAlign: 'top',
+          labelWidth: 100,
+          labelStyle: 'font-weight:bold'
+        },
+        items: [{
+          xtype: 'fieldcontainer',
+          fieldLabel: 'Your Name',
+          labelStyle: 'font-weight:bold;padding:0;',
+          layout: 'hbox',
+          defaultType: 'textfield',
+
+          fieldDefaults: {
+            labelAlign: 'top'
+          },
+
+          items: [{
+            flex: 1,
+            name: 'firstName',
+            itemId: 'firstName',
+            afterLabelTextTpl: required,
+            fieldLabel: 'First',
+            allowBlank: false
+          }, {
+            width: 30,
+            name: 'middleInitial',
+            fieldLabel: 'MI',
+            margins: '0 0 0 5'
+          }, {
+            flex: 2,
+            name: 'lastName',
+            afterLabelTextTpl: required,
+            fieldLabel: 'Last',
+            allowBlank: false,
+            margins: '0 0 0 5'
+          }]
+        }, {
+          xtype: 'textfield',
+          fieldLabel: 'Your Email Address',
+          afterLabelTextTpl: required,
+          vtype: 'email',
+          allowBlank: false
+        }, {
+          xtype: 'textfield',
+          fieldLabel: 'Company',
+          afterLabelTextTpl: required,
+          allowBlank: false
+        }, {
+          xtype: 'textareafield',
+          fieldLabel: 'Note',
+          labelAlign: 'top',
+          flex: 1,
+          margins: '0',
+          afterLabelTextTpl: required,
+          allowBlank: false
+        }],
+
+        buttons: [{
+          text: 'Cancel',
+          handler: function() {
+            this.up('form').getForm().reset();
+            this.up('window').hide();
+          }
+        }, {
+          text: 'Save',
+          handler: function() {
+            if (this.up('form').getForm().isValid()) {
+              // In a real application, this would submit the form to the configured url
+              // this.up('form').getForm().submit();
+              this.up('form').getForm().reset();
+              this.up('window').hide();
+              Ext.MessageBox.alert('System Info', 'User saved!');
+            }
+          }
+        }]
+      });
+
+      win = Ext.widget('window', {
+        title: 'User Info',
+        closeAction: 'hide',
+        width: 400,
+        height: 400,
+        minWidth: 300,
+        minHeight: 300,
+        layout: 'fit',
+        resizable: true,
+        modal: true,
+        items: form,
+        defaultFocus: 'firstName'
+      });
+    }
+    win.show();
+  }
+
+
+  var view = Ext.create('Ext.Viewport', {
+    layout: 'border',
+    items: [{
+      region: 'north',
+      xtype: 'container',
+      style: {backgroundImage: '-webkit-linear-gradient(top,#f3f6fc,#cbdaf0)'},
+      html: '<h1 style="padding-left: 10px">Banner</h1>',
+//        flex: 1,
+      height: 52,
+      layout: {
+        type: 'hbox',
+        align: 'middle'
+      }
+    }, {
+      region: 'west',
+      xtype: 'container',
+      width: 250,
+      split: true,
+      stateful: true,
+      stateId: 'mainnav.west',
+      weight: 10,
+      items: [
+        {
+          xtype:'container',
+          width: '250',
+          layout: {
+            type: 'vbox',
+            pack: 'center'
+          },
+          defaults:{
+            width: 250
+          },
+          items: [
+            {
+              xtype: 'datepicker',
+              maxDate: new Date(),
+              handler: function(picker, date) {
+                Ext.Msg.alert('System Info', 'Search for day: ' + date);
+              }
+            },
+            {
+              xtype: 'gridpanel',
+              title: 'Patients List',
+              collapsible: true,
+              deferRowRender: false,
+              height: 400,
+              store: getPatientStore(),
+
+              columns: [
+                {header: "ID",      flex: 1, dataIndex: 'id'},
+                {header: "Name",    width: 80, dataIndex: 'name'},
+                {header: "Time",    width: 45, dataIndex: 'time'},
+                {header: "Status",  width: 80,  dataIndex: 'status'}
+              ],
+              loadMask: true,
+
+              viewConfig: {
+                stripeRows: true
+              },
+              tbar: [
+                {
+                  text: 'New User',
+                  handler: showContactForm
+                },
+                '->',
+                {
+                  xtype: 'triggerfield',
+                  emptyText : 'ID / Name',
+                  onTrigger1Click: function(eOpts){
+                    this.reset();
+                  },
+                  onTrigger2Click: function(eOpts){
+                    Ext.Msg.alert('System Info', 'Search by: ' + this.getValue());
+                  },
+                  trigger1Cls: Ext.baseCSSPrefix + 'form-clear-trigger',
+                  trigger2Cls: Ext.baseCSSPrefix + 'form-search-trigger'
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }, {
+      region: 'center',
+      xtype: 'container',
+      layout: 'fit',
+      flex:.5,
+      items:[
+        {
+          xtype: 'form',
+          tools: [
+            {
+              type:'left',
+              tooltip: {
+                width: 100,
+                text: 'Apply from Case'
+              },
+              // hidden:true,
+              handler: function(event, toolEl, panel){
+                showCases();
+              }
+            }
+          ],
+          layout: 'form',
+//          collapsible: true,
+          id: 'simpleForm',
+          frame: true,
+          title: 'User Form',
+          bodyPadding: '5 5 0',
+          width: 350,
+          fieldDefaults: {
+            msgTarget: 'side',
+            labelWidth: 75
+          },
+          defaultType: 'textfield',
+          items: [
+            {
+              xtype:'fieldset',
+              title: '這裡的數據來自左邊的病患列表，點擊列表將替換此處數據',
+              defaultType: 'textfield',
+              layout: 'anchor',
+              defaults: {
+                anchor: '100%'
+              },
+              items: [{
+                fieldLabel: 'ID',
+                name: 'id',
+                allowBlank: true,
+                tooltip: 'Enter your first name',
+                value: '20131412123',
+                readOnly: true
+              },{
+                  fieldLabel: 'First Name',
+                  name: 'first',
+                  allowBlank: true,
+                  tooltip: 'Enter your first name',
+                  value: 'Ian',
+                  readOnly: true
+                },{
+                  fieldLabel: 'Last Name',
+                  name: 'last',
+                  allowBlank: true,
+                  tooltip: 'Enter your last name',
+                  value: 'Scholer',
+                  readOnly: true
+                },{
+                  fieldLabel: 'Company',
+                  name: 'company',
+                  tooltip: "Enter your employer's name",
+                  value: 'IBM',
+                  readOnly: true
+                }, {
+                  fieldLabel: 'Email',
+                  name: 'email',
+                  allowBlank: true,
+                  vtype:'email',
+                  tooltip: 'Enter your email address',
+                  value: 'Ian@ibm.com',
+                  readOnly: true
+                }, {
+                  fieldLabel: 'DOB',
+                  name: 'dob',
+                  xtype: 'datefield',
+                  tooltip: 'Enter your date of birth',
+                  value: '1982-11-21',
+                  readOnly: true
+                }, {
+                  fieldLabel: 'Age',
+                  name: 'age',
+                  xtype: 'numberfield',
+                  minValue: 0,
+                  maxValue: 100,
+                  tooltip: 'Enter your age',
+                  value: '31',
+                  readOnly: true
+                }
+              ]
+            }
+          ],
+
+          buttons: [{
+            text: 'Start Diagnosis',
+            handler: function() {
+              this.up('form').getForm().isValid();
+            }
+          },{
+            text: 'Lock',
+            handler: function() {
+//              this.up('form').getForm().reset();
+            }
+          }]
+        }
+      ]
+
+    },{
+      region: 'south',
+      flex:.5,
+      weight: 1,
+      xtype:'tabpanel',
+      activeTab: 0,
+      defaults :{
+        autoScroll: true,
+        bodyPadding: 10
+      },
+      items: [{
+        title: '中藥',
+        html: "Search form!."
+      },{
+        title: '西藥',
+        html: "Search form!."
+      },{
+        title: '中成藥',
+        html: "Search form!."
+      },{
+        title: 'And so on...',
+        listeners: {
+          activate: function(tab){
+
+          }
+        },
+        html: "Some other info"
+      }
+      ]
+    }, {
+      region: 'east',
+      id: 'east-region',
+      title: 'Medical Record',
+      width: 250,
+      autoScroll: true,
+      tools:[
+        {
+          type: 'maximize',
+          tooltip: 'Maximize',
+          handler: function(){
+            var preview = this.up('panel'),
+              code = preview.getEl().down('.prettyprint').dom.innerHTML;
+
+            var w = new Ext.window.Window({
+              autoShow: true,
+              title: 'Preview',
+              tools: [
+                {
+                  type:'print',
+                  tooltip: {
+                    width: 100,
+                    text: 'Print Page'
+                  },
+                  // hidden:true,
+                  handler: function(event, toolEl, panel){
+                    Ext.Msg.alert('System Info', 'Paper printing...')
+                  }
+                }
+              ],
+              modal: true,
+              cls: 'preview-container',
+              autoScroll: true,
+              html: '<pre class="prettyprint">' + code + '</pre>'
+            });
+            w.maximize();
+          }
+        },
+        {
+          type:'print',
+          tooltip: {
+            width: 100,
+            text: 'Print Page'
+          },
+          // hidden:true,
+          handler: function(event, toolEl, panel){
+            Ext.Msg.alert('System Info', 'Paper printing...')
+          }
+        }
+      ],
+      weight: 5,
+      html: '<div class="prettyprint">這裡模擬紙質病歷</div>'
+//        stateful: true,
+//        stateId: 'mainnav.east',
+//        split: true,
+//        collapsible: true,
+//        layout: {
+//            type: 'vbox',
+//            align: 'stretch'
+//        },
+//        width: 250,
+//        items: [{
+//            xtype: 'descriptionPanel',
+//            stateful: true,
+//            stateId: 'mainnav.east.description',
+//            height: 200
+//        }, {
+//            xtype: 'splitter',
+//            collapsible: true,
+//            collapseTarget: 'prev'
+//        }, {
+//            xtype: 'codePreview',
+//            flex: 1
+//        }]
+    }]
+  });
+});
+</script>
+</head>
+<body>
+
+</body>
+</html>
