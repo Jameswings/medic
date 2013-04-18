@@ -4,10 +4,133 @@
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <title>Demo</title>
 <link href="jslib/extjs/resources/css/ext-all.css" rel="stylesheet" />
+<link rel="stylesheet" type="text/css" href="jslib/extjs/ux/statusbar/css/statusbar.css" />
 <script src="jslib/extjs/ext-all.js"></script>
 <script type="text/javascript">
+Ext.Loader.setConfig({
+  enabled: true
+});
+
+Ext.Loader.setPath('Ext.ux', 'jslib/extjs/ux/');
+Ext.require(['Ext.ux.statusbar.StatusBar']);
+
 Ext.onReady(function(){
   Ext.tip.QuickTipManager.init();
+
+
+
+  Ext.define('Ext.ux.NewDatePicker', {
+    extend: 'Ext.picker.Date',
+    requires: [
+      'Ext.XTemplate',
+      'Ext.button.Button',
+      'Ext.window.Window'
+    ],
+    alias: 'widget.newdatepicker',
+    renderTpl: [
+      '<div id="{id}-innerEl" role="grid">',
+      '<div role="presentation" class="{baseCls}-header">',
+      // the href attribute is required for the :hover selector to work in IE6/7/quirks
+      '<a id="{id}-prevEl" class="{baseCls}-prev {baseCls}-arrow" href="#" role="button" title="{prevText}" hidefocus="on" ></a>',
+      '<div class="{baseCls}-month" id="{id}-middleBtnEl">{%this.renderMonthBtn(values, out)%}</div>',
+      // the href attribute is required for the :hover selector to work in IE6/7/quirks
+      '<a id="{id}-nextEl" class="{baseCls}-next {baseCls}-arrow" href="#" role="button" title="{nextText}" hidefocus="on" ></a>',
+      '</div>',
+      '<table id="{id}-eventEl" class="{baseCls}-inner" cellspacing="0" role="presentation">',
+      '<thead role="presentation"><tr role="presentation">',
+      '<tpl for="dayNames">',
+      '<th role="columnheader" class="{parent.baseCls}-column-header" title="{.}">',
+      '<div class="{parent.baseCls}-column-header-inner">{.:this.firstInitial}</div>',
+      '</th>',
+      '</tpl>',
+      '</tr></thead>',
+      '<tbody role="presentation"><tr role="presentation">',
+      '<tpl for="days">',
+      '{#:this.isEndOfWeek}',
+      '<td role="gridcell" id="{[Ext.id()]}">',
+      // the href attribute is required for the :hover selector to work in IE6/7/quirks
+      '<a role="presentation" hidefocus="on" class="{parent.baseCls}-date" href="#"></a>',
+      '</td>',
+      '</tpl>',
+      '</tr></tbody>',
+      '</table>',
+      '<tpl if="showToday">',
+      '<div id="{id}-footerEl" role="presentation" class="{baseCls}-footer">{%this.renderTodayBtn(values, out)%} {%this.renderDatingBtn(values, out)%}</div>',
+      '</tpl>',
+      '</div>',
+      {
+        firstInitial: function(value) {
+          return Ext.picker.Date.prototype.getDayInitial(value);
+        },
+        isEndOfWeek: function(value) {
+          // convert from 1 based index to 0 based
+          // by decrementing value once.
+          value--;
+          var end = value % 7 === 0 && value !== 0;
+          return end ? '</tr><tr role="row">' : '';
+        },
+        renderTodayBtn: function(values, out) {
+          Ext.DomHelper.generateMarkup(values.$comp.todayBtn.getRenderTree(), out);
+        },
+        renderMonthBtn: function(values, out) {
+          Ext.DomHelper.generateMarkup(values.$comp.monthBtn.getRenderTree(), out);
+        },
+        renderDatingBtn: function(values, out){
+          Ext.DomHelper.generateMarkup(values.$comp.datingBtn.getRenderTree(), out);
+        }
+      }
+    ],
+    beforeRender: function () {
+      var me = this;
+
+      me.datingBtn = new Ext.button.Button({
+        ownerCt: me,
+        ownerLayout: me.getComponentLayout(),
+        text: 'Appointment',
+        tooltip: 'Appointment',
+        tooltipType: 'title',
+        handler: me.onDatingBtnClick,
+        scope: me
+      });
+
+      me.callParent();
+
+    },
+    beforeDestroy : function() {
+      var me = this;
+
+      if (me.rendered) {
+        Ext.destroy(
+          me.datingBtn
+        );
+      }
+      me.callParent();
+    },
+    finishRenderChildren: function () {
+      var me = this;
+      me.callParent();
+      me.datingBtn.finishRender();
+    },
+    onDatingBtnClick: function(picker){
+      window.open('./dating/index.html');
+
+//      var w = new Ext.window.Window({
+//        autoShow: true,
+//        title: 'Dating',
+//        modal: true,
+//        cls: 'preview-container',
+//        autoScroll: true,
+//        loader: {
+//          autoLoad: true,
+//          scripts: true,
+//          url: 'dating/index.html'
+//        }
+//      });
+//      w.maximize();
+    }
+  });
+
+
   var required = '<span style="color:red;font-weight:bold" data-qtip="Required">*</span>',
       win, store, caseWin;
 
@@ -340,8 +463,10 @@ Ext.onReady(function(){
     }, {
       region: 'west',
       xtype: 'container',
+      layout: 'fit',
       width: 250,
       split: true,
+      splitterResize: false,
       stateful: true,
       stateId: 'mainnav.west',
       weight: 10,
@@ -351,15 +476,16 @@ Ext.onReady(function(){
           width: '250',
           layout: {
             type: 'vbox',
-            pack: 'center'
+//            pack: 'center',
+            align : 'stretch',
+            pack  : 'start'
           },
           defaults:{
             width: 250
           },
           items: [
             {
-              xtype: 'datepicker',
-              maxDate: new Date(),
+              xtype: 'newdatepicker',
               handler: function(picker, date) {
                 Ext.Msg.alert('System Info', 'Search for day: ' + date);
               }
@@ -367,9 +493,8 @@ Ext.onReady(function(){
             {
               xtype: 'gridpanel',
               title: 'Patients List',
-              collapsible: true,
               deferRowRender: false,
-              height: 400,
+              flex: 1,
               store: getPatientStore(),
 
               columns: [
@@ -407,13 +532,15 @@ Ext.onReady(function(){
         }
       ]
     }, {
-      region: 'center',
+      region: 'north',
+      weight: 1,
       xtype: 'container',
-      layout: 'fit',
-      flex:.5,
+      layout: 'anchor',
+      height: 300,
       items:[
         {
           xtype: 'form',
+          anchor: '100%',
           tools: [
             {
               type:'left',
@@ -519,9 +646,8 @@ Ext.onReady(function(){
       ]
 
     },{
-      region: 'south',
-      flex:.5,
-      weight: 1,
+      region: 'center',
+      weight: 5,
       xtype:'tabpanel',
       activeTab: 0,
       defaults :{
@@ -621,6 +747,23 @@ Ext.onReady(function(){
 //            xtype: 'codePreview',
 //            flex: 1
 //        }]
+    },{
+      region: 'south',
+      xtype: 'container',
+      layout: 'fit',
+      weight: 20,
+      height: 28,
+      border: false,
+      items: Ext.create('Ext.ux.StatusBar', {
+        defaultText: 'Default status',
+        id: 'right-statusbar',
+//        statusAlign: 'right', // the magic config
+        text: 'Ready',
+        iconCls: 'x-status-valid',
+        items: [{
+          text: 'A Button'
+        }, '-', 'Plain Text', ' ', ' ']
+      })
     }]
   });
 });
