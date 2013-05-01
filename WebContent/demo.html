@@ -13,6 +13,12 @@ Ext.Loader.setConfig({
 
 Ext.Loader.setPath('Ext.ux', 'jslib/extjs/ux/');
 Ext.require(['Ext.ux.statusbar.StatusBar']);
+Ext.regModel('Medicgridmodel', {
+  fields: [
+    'name',
+    'usage'
+  ]
+});
 
 Ext.onReady(function(){
   Ext.tip.QuickTipManager.init();
@@ -39,7 +45,7 @@ Ext.onReady(function(){
       '<table id="{id}-eventEl" class="{baseCls}-inner" cellspacing="0" role="presentation">',
       '<thead role="presentation"><tr role="presentation">',
       '<tpl for="dayNames">',
-      '<th role="columnheader" class="{parent.baseCls}-column-header" title="{.}">',
+      '<th role="columnheader" class="{parent.baseCls}-column-header" title="{.}" >',
       '<div class="{parent.baseCls}-column-header-inner">{.:this.firstInitial}</div>',
       '</th>',
       '</tpl>',
@@ -47,9 +53,9 @@ Ext.onReady(function(){
       '<tbody role="presentation"><tr role="presentation">',
       '<tpl for="days">',
       '{#:this.isEndOfWeek}',
-      '<td role="gridcell" id="{[Ext.id()]}">',
+      '<td role="gridcell" id="{[Ext.id()]}" hiddenvalue>',
       // the href attribute is required for the :hover selector to work in IE6/7/quirks
-      '<a role="presentation" hidefocus="on" class="{parent.baseCls}-date" href="#"></a>',
+      '<a role="presentation" hidefocus="on" class="{parent.baseCls}-date" href="#">/a>',
       '</td>',
       '</tpl>',
       '</tr></tbody>',
@@ -113,26 +119,271 @@ Ext.onReady(function(){
     },
     onDatingBtnClick: function(picker){
       window.open('./dating/index.html');
+    },
+    fullUpdate: function(date){
+      var me = this,
+        cells = me.cells.elements,
+        textNodes = me.textNodes,
+        disabledCls = me.disabledCellCls,
+        eDate = Ext.Date,
+        i = 0,
+        extraDays = 0,
+        visible = me.isVisible(),
+        sel = +eDate.clearTime(date, true),
+        today = +eDate.clearTime(new Date()),
+        min = me.minDate ? eDate.clearTime(me.minDate, true) : Number.NEGATIVE_INFINITY,
+        max = me.maxDate ? eDate.clearTime(me.maxDate, true) : Number.POSITIVE_INFINITY,
+        ddMatch = me.disabledDatesRE,
+        ddText = me.disabledDatesText,
+        ddays = me.disabledDays ? me.disabledDays.join('') : false,
+        ddaysText = me.disabledDaysText,
+        format = me.format,
+        days = eDate.getDaysInMonth(date),
+        firstOfMonth = eDate.getFirstDateOfMonth(date),
+        startingPos = firstOfMonth.getDay() - me.startDay,
+        previousMonth = eDate.add(date, eDate.MONTH, -1),
+        longDayFormat = me.longDayFormat,
+        disabled,
+        prevStart,
+        current,
+        disableToday,
+        tempDate,
+        setCellClass,
+        html,
+        cls,
+        formatValue,
+        value;
 
-//      var w = new Ext.window.Window({
-//        autoShow: true,
-//        title: 'Dating',
-//        modal: true,
-//        cls: 'preview-container',
-//        autoScroll: true,
-//        loader: {
-//          autoLoad: true,
-//          scripts: true,
-//          url: 'dating/index.html'
-//        }
-//      });
-//      w.maximize();
+      if (startingPos < 0) {
+        startingPos += 7;
+      }
+
+      days += startingPos;
+      prevStart = eDate.getDaysInMonth(previousMonth) - startingPos;
+      current = new Date(previousMonth.getFullYear(), previousMonth.getMonth(), prevStart, me.initHour);
+
+      if (me.showToday) {
+        tempDate = eDate.clearTime(new Date());
+        disableToday = (tempDate < min || tempDate > max ||
+          (ddMatch && format && ddMatch.test(eDate.dateFormat(tempDate, format))) ||
+          (ddays && ddays.indexOf(tempDate.getDay()) != -1));
+
+        if (!me.disabled) {
+          me.todayBtn.setDisabled(disableToday);
+          me.todayKeyListener.setDisabled(disableToday);
+        }
+      }
+
+      setCellClass = function(cell, cls){
+        disabled = false;
+        value = +eDate.clearTime(current, true);
+        cell.title = eDate.format(current, longDayFormat);
+        cell.alt = eDate.format(current, 'Y-m-d');
+        // store dateValue number as an expando
+        cell.firstChild.dateValue = value;
+        if(value == today){
+          cls += ' ' + me.todayCls;
+          cell.title = me.todayText;
+        }
+        if(value == sel){
+          cls += ' ' + me.selectedCls;
+          me.fireEvent('highlightitem', me, cell);
+          if (visible && me.floating) {
+            Ext.fly(cell.firstChild).focus(50);
+          }
+        }
+        // disabling, once the cell is disabled we can short circuit
+        // the other more expensive checks
+        if(value < min) {
+          cls += ' ' + disabledCls;
+          cell.title = me.minText;
+          disabled = true;
+        }
+        if (!disabled && value > max) {
+          cls += ' ' + disabledCls;
+          cell.title = me.maxText;
+          disabled = true;
+        }
+        if (!disabled && ddays) {
+          if(ddays.indexOf(current.getDay()) !== -1){
+            cell.title = ddaysText;
+            cls += ' ' + disabledCls;
+            disabled = true;
+          }
+        }
+        if(!disabled && ddMatch && format){
+          formatValue = eDate.dateFormat(current, format);
+          if(ddMatch.test(formatValue)){
+            cell.title = ddText.replace('%0', formatValue);
+            cls += ' ' + disabledCls;
+          }
+        }
+        cell.className = cls + ' ' + me.cellCls;
+      };
+
+      for(; i < me.numDays; ++i) {
+        if (i < startingPos) {
+          html = (++prevStart);
+          cls = me.prevCls;
+        } else if (i >= days) {
+          html = (++extraDays);
+          cls = me.nextCls;
+        } else {
+          html = i - startingPos + 1;
+          cls = me.activeCls;
+        }
+        textNodes[i].innerHTML = '<span style="vertical-align: top; width: 6px; font-size: 6pt; color: red;-webkit-text-size-adjust:none;" hiddenvalue="' + eDate.format(current, 'Y-m-d') + '">1 </span>' + html;
+        current.setDate(current.getDate() + 1);
+        setCellClass(cells[i], cls);
+      }
+
+      me.monthBtn.setText(Ext.Date.format(date, me.monthYearFormat));
     }
   });
 
 
   var required = '<span style="color:red;font-weight:bold" data-qtip="Required">*</span>',
-      win, store, caseWin;
+      win, store, caseWin, historyWin, medicineWin;
+
+  Ext.define('Ext.ux.MedicineGrid', {
+    extend: 'Ext.grid.Panel',
+    xtype: 'medicine-grid',
+    requires: [
+      'Ext.grid.feature.Grouping'
+    ],
+//    collapsible: true,
+    iconCls: 'icon-grid',
+    frame: true,
+    width: 600,
+    height: 400,
+    flex: 1,
+    header: false,
+
+    // Need a minHeight. Neptune resizable framed panels are overflow:visible so as to
+    // enable resizing handles to be embedded in the border lines.
+    minHeight: 200,
+//    resizable: true,
+
+    features: [{
+      ftype: 'grouping',
+      groupHeaderTpl: '{name} ({rows.length} Case{[values.rows.length > 1 ? "s" : ""]})',
+      hideGroupedHeader: true,
+      startCollapsed: true,
+      id: 'medicineGrouping'
+    }],
+
+    initComponent: function() {
+      this.store = getMedicStore();
+      this.columns = [{
+        text: 'Name',
+        flex: 1,
+        dataIndex: 'name'
+      }];
+
+      this.callParent();
+
+      var store = this.getStore(),
+        groups = store.getGroups(),
+        len = groups.length, i = 0,
+        toggleMenu = [];
+
+      this.groupingFeature = this.view.getFeature('medicineGrouping');
+
+      // Create checkbox menu items to toggle associated group
+      for (; i < len; i++) {
+        toggleMenu[i] = {
+          xtype: 'menucheckitem',
+          text: groups[i].name,
+          handler: this.toggleGroup,
+          scope: this
+        }
+      }
+
+      this.addDocked([{
+        xtype: 'toolbar',
+        items: ['->',
+          {
+            text: '功效分類',
+            handler: function(){
+              this.up('gridpanel').store.group('type1');
+            }
+          },
+          {
+            text: '用法分類',
+            handler: function(){
+              this.up('gridpanel').store.group('type2');
+            }
+          }
+        ]
+      }, {
+        xtype: 'toolbar',
+        ui: 'footer',
+        dock: 'bottom',
+        items: ['->', {
+          text:'Apply',
+          iconCls: 'icon-clear-group',
+          scope: this,
+          handler: function(){
+            medicineWin.hide();
+          }
+        }]
+      }]);
+
+//      this.mon(this.store, 'groupchange', this.onGroupChange, this);
+      this.mon(this.view, {
+        groupcollapse: this.onGroupCollapse,
+        groupexpand: this.onGroupExpand,
+        scope: this
+      });
+    },
+
+    onClearGroupingClick: function(){
+      this.groupingFeature.disable();
+    },
+
+    toggleGroup: function(item) {
+      var groupName = item.text;
+      if (item.checked) {
+        this.groupingFeature.expand(groupName, true);
+      } else {
+        this.groupingFeature.collapse(groupName, true);
+      }
+    },
+
+    onGroupChange: function(store, groupers) {
+      var grouped = store.isGrouped(),
+        groupBy = groupers.items[0] ? groupers.items[0].property : '',
+        toggleMenuItems, len, i = 0;
+
+      // Clear grouping button only valid if the store is grouped
+//      this.down('[text=Clear Grouping]').setDisabled(!grouped);
+
+      // Sync state of group toggle checkboxes
+      if (grouped && groupBy === 'cuisine') {
+        toggleMenuItems = this.down('button[text=Toggle groups...]').menu.items.items;
+        for (len = toggleMenuItems.length; i < len; i++) {
+          toggleMenuItems[i].setChecked(
+            this.groupingFeature.isExpanded(toggleMenuItems[i].text)
+          );
+        }
+        this.down('[text=Toggle groups...]').enable();
+      } else {
+        this.down('[text=Toggle groups...]').disable();
+      }
+    },
+
+    onGroupCollapse: function(v, n, groupName) {
+      if (!this.down('[text=Toggle groups...]').disabled) {
+        this.down('menucheckitem[text=' + groupName + ']').setChecked(false, true);
+      }
+    },
+
+    onGroupExpand: function(v, n, groupName) {
+      if (!this.down('[text=Toggle groups...]').disabled) {
+        this.down('menucheckitem[text=' + groupName + ']').setChecked(true, true);
+      }
+    }
+  });
 
   Ext.define('Ext.ux.GroupedGrid', {
     extend: 'Ext.grid.Panel',
@@ -150,6 +401,140 @@ Ext.onReady(function(){
     // enable resizing handles to be embedded in the border lines.
     minHeight: 200,
     title: 'Cases Template',
+    resizable: true,
+
+    features: [{
+      ftype: 'grouping',
+      groupHeaderTpl: '{columnName}: {name} ({rows.length} Case{[values.rows.length > 1 ? "s" : ""]})',
+      hideGroupedHeader: true,
+      startCollapsed: true,
+      id: 'restaurantGrouping'
+    }],
+
+    initComponent: function() {
+      this.store = getCasesStore();
+      this.columns = [{
+        text: 'Name',
+        flex: 1,
+        dataIndex: 'name'
+      },{
+        text: 'Description',
+        flex: 1,
+        dataIndex: 'desc'
+      }];
+
+      this.callParent();
+
+      var store = this.getStore(),
+        groups = store.getGroups(),
+        len = groups.length, i = 0,
+        toggleMenu = [];
+
+      this.groupingFeature = this.view.getFeature('restaurantGrouping');
+
+      // Create checkbox menu items to toggle associated group
+      for (; i < len; i++) {
+        toggleMenu[i] = {
+          xtype: 'menucheckitem',
+          text: groups[i].name,
+          handler: this.toggleGroup,
+          scope: this
+        }
+      }
+
+      this.addDocked([{
+        xtype: 'toolbar',
+        items: ['->', {
+          text: 'Toggle groups...',
+          destroyMenu: true,
+          menu: toggleMenu
+        }]
+      }, {
+        xtype: 'toolbar',
+        ui: 'footer',
+        dock: 'bottom',
+        items: ['->', {
+          text:'Apply',
+          iconCls: 'icon-clear-group',
+          scope: this,
+          handler: function(){
+            caseWin.hide();
+          }
+        }]
+      }]);
+
+      this.mon(this.store, 'groupchange', this.onGroupChange, this);
+      this.mon(this.view, {
+        groupcollapse: this.onGroupCollapse,
+        groupexpand: this.onGroupExpand,
+        scope: this
+      });
+    },
+
+    onClearGroupingClick: function(){
+      this.groupingFeature.disable();
+    },
+
+    toggleGroup: function(item) {
+      var groupName = item.text;
+      if (item.checked) {
+        this.groupingFeature.expand(groupName, true);
+      } else {
+        this.groupingFeature.collapse(groupName, true);
+      }
+    },
+
+    onGroupChange: function(store, groupers) {
+      var grouped = store.isGrouped(),
+        groupBy = groupers.items[0] ? groupers.items[0].property : '',
+        toggleMenuItems, len, i = 0;
+
+      // Clear grouping button only valid if the store is grouped
+//      this.down('[text=Clear Grouping]').setDisabled(!grouped);
+
+      // Sync state of group toggle checkboxes
+      if (grouped) {
+        toggleMenuItems = this.down('button[text=Toggle groups...]').menu.items.items;
+        for (len = toggleMenuItems.length; i < len; i++) {
+          toggleMenuItems[i].setChecked(
+            this.groupingFeature.isExpanded(toggleMenuItems[i].text)
+          );
+        }
+        this.down('[text=Toggle groups...]').enable();
+      } else
+        this.down('[text=Toggle groups...]').disable();
+
+    },
+
+    onGroupCollapse: function(v, n, groupName) {
+      if (!this.down('[text=Toggle groups...]').disabled) {
+        this.down('menucheckitem[text=' + groupName + ']').setChecked(false, true);
+      }
+    },
+
+    onGroupExpand: function(v, n, groupName) {
+      if (!this.down('[text=Toggle groups...]').disabled) {
+        this.down('menucheckitem[text=' + groupName + ']').setChecked(true, true);
+      }
+    }
+  });
+
+  Ext.define('Ext.ux.MedicGrid', {
+    extend: 'Ext.grid.Panel',
+    xtype: 'medic-grid',
+    requires: [
+      'Ext.grid.feature.Grouping'
+    ],
+//    collapsible: true,
+    iconCls: 'icon-grid',
+    frame: true,
+    width: 600,
+    height: 400,
+
+    // Need a minHeight. Neptune resizable framed panels are overflow:visible so as to
+    // enable resizing handles to be embedded in the border lines.
+    minHeight: 200,
+    title: 'Medicine Template',
     resizable: true,
 
     features: [{
@@ -291,6 +676,33 @@ Ext.onReady(function(){
       },
       data: myData,
       pageSize: 8
+    });
+  }
+
+  function getMedicStore(){
+    var myData = [
+      ['石斛', '清熱', '內服'],
+      ['羅漢果', '清熱', '內服'],
+      ['菊花', '解毒', '內服'],
+      ['黨蔘', '養生', '內服'],
+      ['枸杞', '養生', '內服'],
+      ['板藍根', '解毒', '內服'],
+      ['金銀花', '解毒', '外敷']
+    ];
+
+    return Ext.create('Ext.data.ArrayStore', {
+      fields: [
+        {name: 'name'},
+        {name: 'type1'},
+        {name: 'type2'}
+      ],
+      groupField: 'type1',
+      sorters: {
+        property : 'id',
+        direction: 'ASC'
+      },
+      data: myData,
+      pageSize: 100
     });
   }
 
@@ -496,7 +908,6 @@ Ext.onReady(function(){
               deferRowRender: false,
               flex: 1,
               store: getPatientStore(),
-
               columns: [
                 {header: "ID",      flex: 1, dataIndex: 'id'},
                 {header: "Name",    width: 80, dataIndex: 'name'},
@@ -535,8 +946,8 @@ Ext.onReady(function(){
       region: 'north',
       weight: 1,
       xtype: 'container',
-      layout: 'anchor',
-      height: 300,
+      layout: 'fit',
+      height: 280,
       items:[
         {
           xtype: 'form',
@@ -554,7 +965,7 @@ Ext.onReady(function(){
               }
             }
           ],
-          layout: 'form',
+          layout: 'fit',
 //          collapsible: true,
           id: 'simpleForm',
           frame: true,
@@ -568,64 +979,148 @@ Ext.onReady(function(){
           defaultType: 'textfield',
           items: [
             {
-              xtype:'fieldset',
-              title: '這裡的數據來自左邊的病患列表，點擊列表將替換此處數據',
-              defaultType: 'textfield',
-              layout: 'anchor',
-              defaults: {
-                anchor: '100%'
-              },
-              items: [{
-                fieldLabel: 'ID',
-                name: 'id',
-                allowBlank: true,
-                tooltip: 'Enter your first name',
-                value: '20131412123',
-                readOnly: true
-              },{
-                  fieldLabel: 'First Name',
-                  name: 'first',
-                  allowBlank: true,
-                  tooltip: 'Enter your first name',
-                  value: 'Ian',
-                  readOnly: true
-                },{
-                  fieldLabel: 'Last Name',
-                  name: 'last',
-                  allowBlank: true,
-                  tooltip: 'Enter your last name',
-                  value: 'Scholer',
-                  readOnly: true
-                },{
-                  fieldLabel: 'Company',
-                  name: 'company',
-                  tooltip: "Enter your employer's name",
-                  value: 'IBM',
-                  readOnly: true
-                }, {
-                  fieldLabel: 'Email',
-                  name: 'email',
-                  allowBlank: true,
-                  vtype:'email',
-                  tooltip: 'Enter your email address',
-                  value: 'Ian@ibm.com',
-                  readOnly: true
-                }, {
-                  fieldLabel: 'DOB',
-                  name: 'dob',
-                  xtype: 'datefield',
-                  tooltip: 'Enter your date of birth',
-                  value: '1982-11-21',
-                  readOnly: true
-                }, {
-                  fieldLabel: 'Age',
-                  name: 'age',
-                  xtype: 'numberfield',
-                  minValue: 0,
-                  maxValue: 100,
-                  tooltip: 'Enter your age',
-                  value: '31',
-                  readOnly: true
+              xtype: 'fieldcontainer',
+              layout: 'hbox',
+              items: [
+                {
+                  xtype:'fieldset',
+                  title: '基本信息',
+                  defaultType: 'textfield',
+                  layout: 'anchor',
+                  flex: 2,
+                  defaults: {
+                    anchor: '100%'
+                  },
+                  items: [{
+                    fieldLabel: 'ID',
+                    name: 'id',
+                    allowBlank: true,
+                    tooltip: 'Enter your first name',
+                    value: '20131412123',
+                    readOnly: true
+                  },{
+                    fieldLabel: 'First Name',
+                    name: 'first',
+                    allowBlank: true,
+                    tooltip: 'Enter your first name',
+                    value: 'Ian',
+                    readOnly: true
+                  },{
+                    fieldLabel: 'Last Name',
+                    name: 'last',
+                    allowBlank: true,
+                    tooltip: 'Enter your last name',
+                    value: 'Scholer',
+                    readOnly: true
+                  },{
+                    fieldLabel: 'Company',
+                    name: 'company',
+                    tooltip: "Enter your employer's name",
+                    value: 'IBM',
+                    readOnly: true
+                  }, {
+                    fieldLabel: 'Email',
+                    name: 'email',
+                    allowBlank: true,
+                    vtype:'email',
+                    tooltip: 'Enter your email address',
+                    value: 'Ian@ibm.com',
+                    readOnly: true
+                  }, {
+                    fieldLabel: 'DOB',
+                    name: 'dob',
+                    xtype: 'datefield',
+                    tooltip: 'Enter your date of birth',
+                    value: '1982-11-21',
+                    readOnly: true
+                  }, {
+                    fieldLabel: 'Age',
+                    name: 'age',
+                    xtype: 'numberfield',
+                    minValue: 0,
+                    maxValue: 100,
+                    tooltip: 'Enter your age',
+                    value: '31',
+                    readOnly: true
+                  }
+                  ]
+                },
+                {
+                  xtype: 'gridpanel',
+                  title: 'History',
+                  flex: 1.5,
+                  height: 215,
+                  padding: '8px',
+                  showHistory: function(record){
+                    if (!historyWin){
+//                      var caseGrid = Ext.create('Ext.ux.GroupedGrid');
+
+                      historyWin = Ext.widget('window', {
+                        title: 'History Medical Record',
+                        closeAction: 'hide',
+                        width: 400,
+                        height: 500,
+                        minWidth: 300,
+                        minHeight: 300,
+                        layout: 'fit',
+                        resizable: true,
+                        modal: true,
+                        items: [
+                          {
+                            html: 'show information here!'
+                          }
+                        ]
+//        defaultFocus: 'firstName'
+                      });
+                    }
+                    historyWin.show();
+                  },
+                  store: new Ext.data.Store({
+                    fields:['name', 'time', 'mark'],
+                    data:{'items':[
+                      { 'name': 'Ian Scholar',  "time":"2010-07-12",  "mark":"长期治疗"  },
+                      { 'name': 'Ian Scholar',  "time":"2010-07-19",  "mark":"" },
+                      { 'name': 'Ian Scholar', "time":"2012-12-07",  "mark":""  },
+                      { 'name': 'Ian Scholar', "time":"2013-03-15", "mark":""  }
+                    ]},
+                    proxy: {
+                      type: 'memory',
+                      reader: {
+                        type: 'json',
+                        root: 'items'
+                      }
+                    }
+                  }),
+                  columns: [
+                    { text: 'Name',  dataIndex: 'name' },
+                    { text: 'Time', dataIndex: 'time', flex: 1 },
+                    { text: '診斷', dataIndex: 'mark' },
+                    {
+                      menuDisabled: true,
+                      sortable: false,
+                      xtype: 'actioncolumn',
+                      dataIndex: 'mark',
+                      flex:.5,
+                      items: [
+                        {
+                          icon: 'jslib/extjs/resources/themes/images/default/tree/leaf.gif',
+                          altText: 'Detail',  // Use a URL in the icon config
+                          tooltip: 'Show details',
+                          handler: function(grid, rowIndex, colIndex) {
+                            var rec = grid.getStore().getAt(rowIndex);
+//                            alert("Edit " + rec.get('firstname'));
+                            grid.up('gridpanel').showHistory(rec);
+                          }
+                        }
+                      ]
+                    }
+
+                  ],
+                  listeners: {
+                    itemdblclick: function(grid, record, item, index, e, eOpts ){
+                      this.showHistory(record);
+                    }
+                  }
                 }
               ]
             }
@@ -649,14 +1144,109 @@ Ext.onReady(function(){
       region: 'center',
       weight: 5,
       xtype:'tabpanel',
+      layout: 'fit',
       activeTab: 0,
       defaults :{
-        autoScroll: true,
-        bodyPadding: 10
+        autoScroll: true
       },
       items: [{
         title: '中藥',
-        html: "Search form!."
+        xtype: 'container',
+        layout: 'hbox',
+        items: [
+          {
+            xtype: 'gridpanel',
+            flex: 2,
+            plugins: [
+              new Ext.grid.plugin.CellEditing({
+                clicksToEdit: 1
+              })
+            ],
+            store: new Ext.data.ArrayStore({
+              // destroy the store if the grid is destroyed
+              autoDestroy: true,
+              fields: ['name', 'usage'],
+              data: [
+                ['石斛', '50 mg'],
+                ['板藍根', '5 mg'],
+                ['金銀花', '5 g'],
+                ['羅漢果', '1 個']
+              ],
+              pageSize: 30
+            }),
+            columns: [{
+              header: '品名',
+              dataIndex: 'name',
+              flex: 10,
+              allowBlank: false,
+              editor: new Ext.form.field.ComboBox({
+                typeAhead: true,
+                triggerAction: 'all',
+                selectOnTab: true,
+                store: [
+                  ['石斛','石斛'],
+                  ['羅漢果','羅漢果'],
+                  ['菊花','菊花'],
+                  ['黨蔘','黨蔘'],
+                  ['枸杞','枸杞'],
+                  ['板藍根','板藍根'],
+                  ['金銀花','金銀花']
+                ],
+                lazyRender: true,
+                listClass: 'x-combo-list-small'
+              })
+            }, {
+              header: '用法',
+              dataIndex: 'usage',
+              flex: 20,
+//              align: 'right',
+              editor: {
+                allowBlank: false
+              }
+            }],
+            selModel: {
+              selType: 'cellmodel'
+            },
+            tbar: [{
+              text: '增加一條',
+              handler: function(){
+
+                var rec = new Medicgridmodel({
+                  name: '',
+                  usage: '...'
+                });
+                console.log(rec);
+
+                this.up('gridpanel').getStore().insert(0, rec);
+//                this.cellEditing.startEditByPosition({
+//                  row: 0,
+//                  column: 0
+//                });
+              }
+            },'->', {
+              text: '藥名查詢',
+              handler: function(){
+                if (!medicineWin) {
+                  var grid = new Ext.ux.MedicineGrid();
+                  medicineWin = Ext.widget('window', {
+                      title: '藥名查詢',
+                      closeAction: 'hide',
+                      width: 400,
+                      height: 500,
+                      minWidth: 300,
+                      minHeight: 300,
+                      layout: 'fit',
+                      resizable: true,
+                      modal: true,
+                      items: grid
+//        defaultFocus: 'firstName'
+                    });
+                }
+                medicineWin.show();
+              }
+            }]
+          }
+        ]
       },{
         title: '西藥',
         html: "Search form!."
